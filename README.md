@@ -1,3 +1,5 @@
+<img src="custom_components/refoss_extra_broadcast/brand/icon.png" alt="icon" width="96" align="right">
+
 # Refoss extra broadcast (VLAN discovery)
 
 A small Home Assistant custom integration that lets the built-in
@@ -96,6 +98,12 @@ logger:
     custom_components.refoss_extra_broadcast: debug
     refoss_ha: debug
 ```
+
+## Icon
+
+The integration ships its own icon in `custom_components/refoss_extra_broadcast/brand/`
+(`icon.png` 256×256, `icon@2x.png` 512×512). Home Assistant 2026.3 and newer show it
+automatically. Older versions show a generic placeholder. The source is `assets/icon.svg`.
 
 ## Development
 
