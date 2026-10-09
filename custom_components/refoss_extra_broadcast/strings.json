@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Refoss extra broadcast",
+        "description": "Send the Refoss discovery probe to extra addresses so devices on other VLANs/subnets are found.\n\nSubnet broadcasts detected on Home Assistant's enabled network adapters: **{detected}**",
+        "data": {
+          "auto_broadcast": "Probe subnet broadcasts of all enabled network adapters",
+          "addresses": "Extra addresses (comma separated, e.g. 192.168.87.255, 192.168.87.65)"
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "One or more addresses are not valid IPv4 addresses.",
+      "nothing_to_probe": "Enable automatic adapter broadcasts or enter at least one address."
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Use Configure to change addresses."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Refoss extra broadcast",
+        "description": "Subnet broadcasts detected on Home Assistant's enabled network adapters: **{detected}**",
+        "data": {
+          "auto_broadcast": "Probe subnet broadcasts of all enabled network adapters",
+          "addresses": "Extra addresses (comma separated, e.g. 192.168.87.255, 192.168.87.65)"
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "One or more addresses are not valid IPv4 addresses.",
+      "nothing_to_probe": "Enable automatic adapter broadcasts or enter at least one address."
+    }
+  }
+}

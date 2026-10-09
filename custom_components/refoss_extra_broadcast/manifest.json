@@ -3,9 +3,13 @@
   "name": "Refoss extra broadcast (VLAN discovery)",
   "after_dependencies": ["refoss"],
   "codeowners": ["@bernysk"],
+  "config_flow": true,
+  "dependencies": ["network"],
   "documentation": "https://github.com/bernysk/refoss_extra_broadcast",
+  "integration_type": "service",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/bernysk/refoss_extra_broadcast/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "single_config_entry": true,
+  "version": "1.1.0"
 }

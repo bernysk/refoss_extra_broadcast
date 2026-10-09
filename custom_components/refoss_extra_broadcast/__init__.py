@@ -1,46 +1,47 @@
-"""Refoss extra broadcast.
+"""Refoss extra broadcast - Refoss discovery across VLANs / subnets.
 
 The core Refoss integration (library refoss-ha) discovers devices by sending
 a UDP probe to 255.255.255.255:9988 every 30 s. Linux sends a limited
-broadcast only out of the default-route interface, so devices in another
-VLAN are never found, even if Home Assistant has an interface in that VLAN.
+broadcast only out of the default-route interface, so devices on another
+VLAN are never found, even if Home Assistant has an interface there.
 
 This integration patches refoss_ha.discovery.Discovery.broadcast_msg so the
-same probe is ALSO sent to extra addresses (subnet broadcasts such as
-192.168.87.255, or device IPs). Devices answer to HA:9989 and are then
+same probe is ALSO sent to subnet broadcasts of HA's network adapters and/or
+manually configured addresses. Devices answer to HA:9989 and are then
 discovered / IP-updated by the unchanged core integration.
-
-configuration.yaml:
-    refoss_extra_broadcast:
-      addresses:
-        - 192.168.87.255
 """
 
 from __future__ import annotations
 
-import json
 import logging
 
 import voluptuous as vol
 
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+from .const import CONF_ADDRESSES, CONF_AUTO, DOMAIN
+from .helpers import (
+    ACTIVE_ADDRESSES,
+    async_adapter_broadcasts,
+    async_patch_discovery,
+    parse_addresses,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "refoss_extra_broadcast"
-CONF_ADDRESSES = "addresses"
-DISCOVERY_PORT = 9988
-# Same probe payload the refoss-ha library sends
-PROBE = json.dumps(
-    {"id": "48cbd88f969eb3c486085cfe7b5eb1e4", "devName": "*"}
-).encode("utf-8")
-
+# Optional legacy YAML; imported into a UI config entry
 CONFIG_SCHEMA = vol.Schema(
     {
         DOMAIN: vol.Schema(
-            {vol.Required(CONF_ADDRESSES): vol.All(cv.ensure_list, [cv.string])}
+            {
+                vol.Optional(CONF_ADDRESSES, default=[]): vol.All(
+                    cv.ensure_list, [cv.string]
+                ),
+                vol.Optional(CONF_AUTO, default=False): cv.boolean,
+            }
         )
     },
     extra=vol.ALLOW_EXTRA,
@@ -48,30 +49,43 @@ CONFIG_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Patch refoss-ha discovery to probe extra addresses."""
-    addresses: list[str] = config[DOMAIN][CONF_ADDRESSES]
+    """Import YAML configuration (if any) into a config entry."""
+    if DOMAIN in config:
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT}, data=config[DOMAIN]
+            )
+        )
+    return True
 
-    try:
-        from refoss_ha.discovery import Discovery  # noqa: PLC0415
-    except ImportError:
-        _LOGGER.error("refoss-ha not installed - set up the Refoss integration first")
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up from a config entry."""
+    if not async_patch_discovery():
         return False
 
-    original = Discovery.broadcast_msg
-    if getattr(original, "_refoss_extra_patched", False):
-        return True
+    opts = {**entry.data, **entry.options}
+    addresses: list[str] = []
+    if opts.get(CONF_AUTO, True):
+        addresses += await async_adapter_broadcasts(hass)
+    addresses += parse_addresses(opts.get(CONF_ADDRESSES, ""))
+    addresses = list(dict.fromkeys(addresses))
 
-    async def broadcast_msg(self, wait_for: int = 0):
-        transport = getattr(self, "transport", None)
-        if transport is not None:
-            for addr in addresses:
-                try:
-                    transport.sendto(PROBE, (addr, DISCOVERY_PORT))
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug("Extra refoss probe to %s failed: %s", addr, err)
-        return await original(self, wait_for)
+    ACTIVE_ADDRESSES[:] = addresses
+    _LOGGER.info(
+        "Refoss discovery also probing: %s", ", ".join(addresses) or "(nothing)"
+    )
 
-    broadcast_msg._refoss_extra_patched = True  # type: ignore[attr-defined]
-    Discovery.broadcast_msg = broadcast_msg
-    _LOGGER.info("Refoss discovery also probing: %s", ", ".join(addresses))
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload: stop sending extra probes (patch stays inert)."""
+    ACTIVE_ADDRESSES.clear()
     return True
